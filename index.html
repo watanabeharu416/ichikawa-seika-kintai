@@ -1,0 +1,1204 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>市川青果｜勤怠管理システム</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Yu Gothic", "Meiryo", sans-serif;
+  color: #243247;
+  background: #f2f6fb;
+}
+header {
+  background: #17365d;
+  color: white;
+  padding: 20px 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+header h1 { font-size: 22px; margin: 0; }
+header p { margin: 6px 0 0; color: #d9e7f7; font-size: 13px; }
+.clock { text-align: right; font-size: 14px; }
+.clock strong { display: block; font-size: 22px; }
+main { max-width: 1200px; margin: 28px auto; padding: 0 20px; }
+.layout { display: grid; grid-template-columns: 300px 1fr; gap: 22px; }
+.panel {
+  background: white;
+  border-radius: 14px;
+  padding: 22px;
+  box-shadow: 0 3px 14px #18365d0d;
+}
+h2 { font-size: 18px; margin: 0 0 18px; }
+input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d6dfeb;
+  border-radius: 8px;
+  font-size: 15px;
+  margin-bottom: 14px;
+}
+.employee {
+  padding: 14px 10px;
+  border-bottom: 1px solid #edf1f6;
+  cursor: pointer;
+  border-radius: 7px;
+}
+.employee:hover, .employee.selected { background: #eaf3ff; }
+.employee small { display: block; color: #718096; margin-top: 5px; }
+.status { font-size: 12px; color: #26734d; }
+.selected-name { color: #17365d; font-size: 22px; font-weight: bold; margin-bottom: 8px; }
+.help { color: #718096; font-size: 13px; margin-bottom: 20px; }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+button {
+  cursor: pointer;
+  border: 0;
+  border-radius: 12px;
+  min-height: 115px;
+  padding: 18px;
+  font-size: 19px;
+  font-weight: bold;
+}
+button span { display: block; font-size: 13px; font-weight: normal; margin-top: 8px; }
+.clockin { background: #dff4e7; color: #187344; }
+.break { background: #deedff; color: #245ea8; }
+.clockout { background: #fde5e5; color: #b52d35; }
+.history { background: #f0f3f7; color: #3c4b60; }
+button:hover { filter: brightness(.97); }
+#message { margin-top: 18px; padding: 14px; border-radius: 8px; background: #f2f6fb; min-height: 46px; }
+.history-list { margin-top: 20px; font-size: 14px; line-height: 1.9; }
+footer { text-align: center; color: #6b7b91; padding: 24px; font-weight: bold; }
+@media(max-width: 760px) {
+  header { padding: 18px; align-items: flex-start; }
+  header h1 { font-size: 18px; }
+  .clock strong { font-size: 18px; }
+  .layout { grid-template-columns: 1fr; }
+  .actions { gap: 10px; }
+  button { min-height: 100px; font-size: 16px; }
+  main { margin: 18px auto; padding: 0 12px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>市川青果｜勤怠管理システム</h1>
+    <button onclick="showAdmin()"
+  style="min-height:42px; padding:8px 14px; font-size:13px; margin-top:12px;">
+  管理画面
+</button>
+    <p>毎日の勤務を、正確に記録。</p>
+  </div>
+  <div class="clock">
+    <div id="today"></div>
+    <strong id="now"></strong>
+  </div>
+</header>
+
+<main>
+  <div class="layout">
+    <section class="panel">
+      <h2>従業員一覧</h2>
+      <input id="search" placeholder="従業員番号・氏名で検索">
+      <div id="employees"></div>
+      <hr>
+
+<h2>従業員を追加</h2>
+<input id="newId" placeholder="従業員番号">
+<input id="newName" placeholder="氏名">
+
+<label for="newPayType">給与形態</label>
+<select id="newPayType">
+  <option value="hourly">時給</option>
+  <option value="daily">日給</option>
+</select>
+
+<label for="newHourlyWage">時給（円）</label>
+<input id="newHourlyWage" type="number" min="0" value="1100" placeholder="例：1100">
+
+<label for="newDailyWage">日給（円）</label>
+<input id="newDailyWage" type="number" min="0" value="0" placeholder="例：9000">
+
+<button class="clockin" style="width:100%;min-height:60px"
+  onclick="addEmployee()">従業員を登録</button>
+
+      <p class="help">従業員を選択してから打刻してください。</p>
+    </section>
+
+    <section class="panel">
+      <h2>勤怠打刻</h2>
+      <div class="selected-name" id="selectedName">従業員を選択してください</div>
+      <div class="help" id="selectedInfo">左側の一覧から従業員を選択</div>
+      <div class="actions">
+        <button class="clockin" onclick="punch('出勤')">出勤<span>勤務を開始する</span></button>
+        <button class="break" onclick="punch('休憩切替')">休憩<span>休憩開始・終了</span></button>
+        <button class="clockout" onclick="punch('退勤')">退勤<span>本日の勤務を終了</span></button>
+        <button class="history" onclick="showHistory()">打刻履歴<span>本日の記録を確認</span></button>
+      </div>
+      <div id="message" role="status">従業員を選択してください。</div>
+      <div class="history-list" id="history"></div>
+      <div style="display:flex; gap:8px; margin-top:24px;">
+  <button onclick="editEmployee()"
+    style="min-height:42px; padding:8px 12px; font-size:12px;">
+    氏名を編集
+  </button>
+
+  <button onclick="deleteEmployee()"
+    style="min-height:42px; padding:8px 12px; font-size:12px; background:#fde5e5; color:#b52d35;">
+    従業員を削除
+  </button>
+  <button onclick="editEmployeeWage()"
+  style="min-height:42px; padding:8px 12px; font-size:12px;">
+  賃金を編集
+</button>
+</div>
+    </section>
+  </div>
+  
+<section id="adminPage" class="panel" style="display:none;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+    <div>
+      <h2 style="margin-bottom:6px;">勤怠管理・月別集計</h2>
+      <p style="font-size:13px;color:#718096;margin:0;">市川青果｜管理者用画面</p>
+    </div>
+    <button onclick="showPunch()" style="min-height:42px;padding:10px 15px;font-size:13px;">← 打刻画面に戻る</button>
+  </div>
+
+  <label for="adminMonth" style="display:block;font-size:13px;margin-bottom:7px;">集計する月</label>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <button class="small-btn" onclick="moveAdminMonth(-1)">前月</button>
+    <input type="month" id="adminMonth" style="width:auto;min-width:160px;margin:0;">
+    <button class="small-btn" onclick="moveAdminMonth(1)">翌月</button>
+  </div>
+  
+<div style="margin-top:12px;margin-bottom:16px;">
+  <button onclick="exportAttendanceCSV()" style="padding:12px 18px;background:#217346;color:white;border:none;border-radius:6px;font-weight:bold;cursor:pointer;">
+    Excel出力（CSV）
+  </button>
+</div>
+
+
+  <div id="adminStats" class="cards" style="margin-top:20px;"></div>
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin:15px 0;">
+  <button onclick="backupData()" style="padding:12px;background:#217346;color:white;border:none;border-radius:6px;">
+    データをバックアップ
+  </button>
+
+  <button onclick="document.getElementById('restoreFile').click()" style="padding:12px;background:#555;color:white;border:none;border-radius:6px;">
+    バックアップを復元
+  </button>
+
+  <input type="file" id="restoreFile" accept=".json,application/json" style="display:none;" onchange="restoreData(event)">
+</div>
+  <h3>従業員別集計</h3>
+  <div id="adminEmployees" class="table-wrap"></div>
+
+  <h3>日別の打刻履歴</h3>
+  <div id="adminDetails" class="table-wrap"></div>
+
+  <p class="notice">
+    ※ 実働時間は、同じ日の出勤・退勤時刻から休憩時間を差し引いて計算します。
+    退勤記録のない日は実働時間に含めません。
+    日付をまたぐ勤務や打刻漏れの自動補正には対応していません。
+  </p>
+</section>
+
+</main>
+
+<section class="panel" style="max-width:1200px; margin:0 auto 24px;">
+  <h2>月別勤怠管理</h2>
+
+  <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:18px;">
+    <button type="button" onclick="changeMonth(-1)"
+      style="min-height:42px; padding:8px 16px; font-size:14px;">
+      前月
+    </button>
+
+    <input type="month" id="monthSelect"
+      style="width:auto; margin:0;">
+
+    <button type="button" onclick="changeMonth(1)"
+      style="min-height:42px; padding:8px 16px; font-size:14px;">
+      翌月
+    </button>
+
+    <button type="button" onclick="renderMonthly()"
+      style="min-height:42px; padding:8px 16px; font-size:14px; background:#deedff; color:#245ea8;">
+      集計する
+    </button>
+  </div>
+
+  <div id="monthlySummary"></div>
+  <div id="monthlyDetails" style="margin-top:20px; overflow-x:auto;"></div>
+</section>
+
+<footer>市川青果　勤怠管理システム</footer>
+
+<script>
+const initialEmployees = [
+  { id: "1001", name: "従業員サンプル1", status: "未出勤" },
+  { id: "1002", name: "従業員サンプル2", status: "未出勤" },
+  { id: "1003", name: "従業員サンプル3", status: "未出勤" }
+];
+
+let employees = JSON.parse(localStorage.getItem("ichikawaEmployees") || "null") || initialEmployees;
+let selectedId = null;
+let logs = JSON.parse(localStorage.getItem("ichikawaLogs") || "[]");
+
+function save() {
+  localStorage.setItem("ichikawaEmployees", JSON.stringify(employees));
+  localStorage.setItem("ichikawaLogs", JSON.stringify(logs));
+}
+function updateClock() {
+  const d = new Date();
+  document.getElementById("today").textContent = d.toLocaleDateString("ja-JP", {
+    year: "numeric", month: "long", day: "numeric", weekday: "short"
+  });
+  document.getElementById("now").textContent = d.toLocaleTimeString("ja-JP");
+}
+
+function renderEmployees() {
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  const root = document.getElementById("employees");
+  root.innerHTML = "";
+
+  employees
+    .filter(e => (e.id + e.name).toLowerCase().includes(q))
+    .forEach(e => {
+      const div = document.createElement("div");
+      div.className = "employee" + (e.id === selectedId ? " selected" : "");
+      div.innerHTML = `<strong>${e.name}</strong><small>従業員番号：${e.id}</small><small class="status">状態：${e.status}</small>`;
+      div.onclick = () => selectEmployee(e.id);
+      root.appendChild(div);
+    });
+}
+
+function editEmployee() {
+  const e = employees.find(x => String(x.id) === String(selectedId));
+
+  if (!e) {
+    alert("先に従業員を選択してください。");
+    return;
+  }
+
+  const newName = prompt("新しい氏名を入力してください。", e.name);
+  if (newName === null) return;
+
+  if (!newName.trim()) {
+    alert("氏名を入力してください。");
+    return;
+  }
+
+  e.name = newName.trim();
+
+  logs.forEach(log => {
+    if (String(log.id) === String(e.id)) {
+      log.name = e.name;
+    }
+  });
+
+  save();
+  renderEmployees();
+  selectEmployee(e.id);
+  alert("氏名を変更しました。");
+}
+
+function editEmployeeWage() {
+  const e = employees.find(x => String(x.id) === String(selectedId));
+
+  if (!e) {
+    alert("先に従業員を選択してください。");
+    return;
+  }
+
+  const currentType = e.payType || "hourly";
+
+  const typeInput = prompt(
+    "給与形態を入力してください。\n1：時給\n2：日給",
+    currentType === "daily" ? "2" : "1"
+  );
+
+  if (typeInput === null) return;
+
+  let payType;
+
+  if (typeInput === "1") {
+    payType = "hourly";
+  } else if (typeInput === "2") {
+    payType = "daily";
+  } else {
+    alert("1 または 2 を入力してください。");
+    return;
+  }
+
+  const currentWage = payType === "hourly"
+    ? (e.hourlyWage ?? 1100)
+    : (e.dailyWage ?? 0);
+
+  const wageInput = prompt(
+    payType === "hourly"
+      ? "時給（円）を入力してください。"
+      : "日給（円）を入力してください。",
+    String(currentWage)
+  );
+
+  if (wageInput === null) return;
+
+  if (
+    wageInput.trim() === "" ||
+    !Number.isFinite(Number(wageInput)) ||
+    Number(wageInput) < 0
+  ) {
+    alert("0以上の正しい金額を入力してください。");
+    return;
+  }
+
+  e.payType = payType;
+
+  if (payType === "hourly") {
+    e.hourlyWage = Number(wageInput);
+  } else {
+    e.dailyWage = Number(wageInput);
+  }
+
+  save();
+  renderEmployees();
+
+  alert("賃金を保存しました。");
+}
+
+function deleteEmployee() {
+  const e = employees.find(x => x.id === selectedId);
+
+  if (!e) {
+    alert("先に従業員を選択してください。");
+    return;
+  }
+
+  if (!confirm(`従業員「${e.name}（${e.id}）」を削除しますか？`)) {
+    return;
+  }
+
+  employees = employees.filter(x => x.id !== e.id);
+  selectedId = null;
+
+  save();
+  renderEmployees();
+
+  document.getElementById("selectedName").textContent = "従業員を選択してください";
+  document.getElementById("selectedInfo").textContent = "左側の一覧から従業員を選択";
+  document.getElementById("message").textContent = "従業員を削除しました。";
+  document.getElementById("history").innerHTML = "";
+
+  alert("従業員を削除しました。");
+}
+
+function addEmployee() {
+  const id = document.getElementById("newId").value.trim();
+  const name = document.getElementById("newName").value.trim();
+  const payType = document.getElementById("newPayType").value;
+  const hourlyInput = document.getElementById("newHourlyWage").value;
+  const dailyInput = document.getElementById("newDailyWage").value;
+  const hourlyWage = Number(hourlyInput);
+  const dailyWage = Number(dailyInput);
+
+  if (!id || !name) {
+    alert("従業員番号と氏名を入力してください。");
+    return;
+  }
+
+  if (employees.some(e => String(e.id) === id)) {
+    alert("この従業員番号はすでに登録されています。");
+    return;
+  }
+
+  if (
+    (payType === "hourly" &&
+      (hourlyInput === "" || !Number.isFinite(hourlyWage) || hourlyWage < 0)) ||
+    (payType === "daily" &&
+      (dailyInput === "" || !Number.isFinite(dailyWage) || dailyWage < 0))
+  ) {
+    alert("給与額を正しく入力してください。");
+    return;
+  }
+
+  employees.push({
+    id: id,
+    name: name,
+    status: "未出勤",
+    payType: payType,
+    hourlyWage: hourlyWage,
+    dailyWage: dailyWage
+  });
+
+  save();
+  renderEmployees();
+
+  document.getElementById("newId").value = "";
+  document.getElementById("newName").value = "";
+
+  alert("従業員を登録しました。");
+}
+
+function selectEmployee(id) {
+  selectedId = id;
+  const e = employees.find(x => x.id === id);
+
+  if (!e) return;
+
+  document.getElementById("selectedName").textContent = e.name;
+  document.getElementById("selectedInfo").textContent =
+    `従業員番号：${e.id} ／ 現在の状態：${e.status}`;
+  document.getElementById("message").textContent =
+    `${e.name} さんを選択中です。`;
+
+  renderEmployees();
+}
+
+function punch(type) {
+  const e = employees.find(x => x.id === selectedId);
+  if (!e) {
+    document.getElementById("message").textContent = "先に従業員を選択してください。";
+    return;
+  }
+  let action = type;
+  if (type === "休憩切替") {
+    action = e.status === "休憩中" ? "休憩終了" : "休憩開始";
+  }
+  if (action === "出勤" && e.status !== "未出勤" && e.status !== "退勤済") {
+    document.getElementById("message").textContent = "すでに出勤状態です。";
+    return;
+  }
+  if (action === "休憩開始" && e.status !== "勤務中") {
+    document.getElementById("message").textContent = "勤務中の場合のみ休憩を開始できます。";
+    return;
+  }
+  if (action === "休憩終了" && e.status !== "休憩中") {
+    document.getElementById("message").textContent = "休憩中ではありません。";
+    return;
+  }
+  if (action === "退勤" && !["勤務中", "休憩中"].includes(e.status)) {
+    document.getElementById("message").textContent = "出勤後に退勤してください。";
+    return;
+  }
+  const now = new Date();
+  const time = now.toLocaleTimeString("ja-JP");
+  logs.push({ id: e.id, name: e.name, action, time, date: now.toLocaleDateString("sv-SE") });
+  if (action === "出勤" || action === "休憩終了") e.status = "勤務中";
+  if (action === "休憩開始") e.status = "休憩中";
+  if (action === "退勤") e.status = "退勤済";
+  save();
+  renderEmployees();
+  selectEmployee(e.id);
+  document.getElementById("message").textContent = `${e.name} さん：${action}を ${time} に記録しました。`;
+}
+function showHistory() {
+  const e = employees.find(x => x.id === selectedId);
+  if (!e) {
+    document.getElementById("history").textContent = "先に従業員を選択してください。";
+    return;
+  }
+  const date = new Date().toLocaleDateString("sv-SE");
+  const todayLogs = logs.filter(l => l.id === e.id && l.date === date);
+  document.getElementById("history").innerHTML = "<strong>本日の打刻履歴</strong><br>" +
+    (todayLogs.length ? todayLogs.map(l => `${l.time}　${l.action}`).join("<br>") : "本日の打刻はありません。");
+}
+document.getElementById("search").addEventListener("input", renderEmployees);
+updateClock();
+setInterval(updateClock, 1000);
+renderEmployees();
+
+function getMonthKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function changeMonth(amount) {
+  const input = document.getElementById("monthSelect");
+  const parts = input.value.split("-").map(Number);
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return;
+
+  const d = new Date(parts[0], parts[1] - 1 + amount, 1);
+  input.value = getMonthKey(d);
+  renderMonthly();
+}
+
+function formatMinutes(total) {
+  const minutes = Math.max(0, Math.round(total));
+  return `${Math.floor(minutes / 60)}時間${minutes % 60}分`;
+}
+
+function renderMonthly() {
+  const month = document.getElementById("monthSelect").value;
+  const summary = document.getElementById("monthlySummary");
+  const details = document.getElementById("monthlyDetails");
+
+  if (!month) {
+    summary.textContent = "確認する月を選択してください。";
+    details.innerHTML = "";
+    return;
+  }
+
+  const monthLogs = logs.filter(log =>
+    typeof log.date === "string" && log.date.startsWith(month)
+  );
+
+  const rows = [];
+
+  employees.forEach(employee => {
+    const employeeLogs = monthLogs
+      .filter(log => log.id === employee.id)
+      .slice()
+      .sort((a, b) =>
+        (a.date + " " + a.time).localeCompare(b.date + " " + b.time)
+      );
+
+    const days = {};
+    employeeLogs.forEach(log => {
+      if (!days[log.date]) days[log.date] = [];
+      days[log.date].push(log);
+    });
+
+    let workMinutes = 0;
+    let breakMinutes = 0;
+    let attendanceDays = 0;
+
+    Object.entries(days).forEach(([date, dayLogs]) => {
+      let clockIn = null;
+      let breakStart = null;
+      let breakTotal = 0;
+      let workTotal = 0;
+      let hasAttendance = false;
+
+      dayLogs.forEach(log => {
+        const timeParts = log.time.match(/^(\d{1,2}):(\d{2}):(\d{2})/);
+        if (!timeParts) return;
+
+        const eventTime =
+          Number(timeParts[1]) * 60 +
+          Number(timeParts[2]) +
+          Number(timeParts[3]) / 60;
+
+        if (log.action === "出勤") {
+          clockIn = eventTime;
+          hasAttendance = true;
+        } else if (log.action === "休憩開始" && clockIn !== null) {
+          breakStart = eventTime;
+        } else if (log.action === "休憩終了" && breakStart !== null) {
+          breakTotal += Math.max(0, eventTime - breakStart);
+          breakStart = null;
+        } else if (log.action === "退勤" && clockIn !== null) {
+          workTotal += Math.max(0, eventTime - clockIn);
+          clockIn = null;
+          hasAttendance = true;
+        }
+      });
+
+      if (hasAttendance) attendanceDays++;
+
+      // 退勤が記録された日だけ実働時間を集計
+      const hasClockOut = dayLogs.some(log => log.action === "退勤");
+      if (hasClockOut) {
+        workMinutes += Math.max(0, workTotal - breakTotal);
+        breakMinutes += breakTotal;
+      }
+    });
+
+    rows.push({
+      name: employee.name,
+      id: employee.id,
+      days: attendanceDays,
+      workMinutes,
+      breakMinutes
+    });
+  });
+
+  summary.innerHTML = `
+    <p>対象月：<strong>${month}</strong></p>
+    <p>登録従業員数：${employees.length}人</p>
+    <p style="color:#718096;font-size:13px;">
+      ※ 実働時間・休憩時間は、出勤と退勤が記録された日のみ集計します。
+    </p>
+  `;
+
+  details.innerHTML = `
+    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+      <thead>
+        <tr style="background:#eaf3ff; text-align:left;">
+          <th style="padding:10px; border:1px solid #d6dfeb;">従業員番号</th>
+          <th style="padding:10px; border:1px solid #d6dfeb;">氏名</th>
+          <th style="padding:10px; border:1px solid #d6dfeb;">出勤日数</th>
+          <th style="padding:10px; border:1px solid #d6dfeb;">実働時間</th>
+          <th style="padding:10px; border:1px solid #d6dfeb;">休憩時間</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(row => `
+          <tr>
+            <td style="padding:10px; border:1px solid #d6dfeb;">${row.id}</td>
+            <td style="padding:10px; border:1px solid #d6dfeb;">${row.name}</td>
+            <td style="padding:10px; border:1px solid #d6dfeb;">${row.days}日</td>
+            <td style="padding:10px; border:1px solid #d6dfeb;">${formatMinutes(row.workMinutes)}</td>
+            <td style="padding:10px; border:1px solid #d6dfeb;">${formatMinutes(row.breakMinutes)}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+document.getElementById("monthSelect").value = getMonthKey();
+document.getElementById("monthSelect").addEventListener("change", renderMonthly);
+renderMonthly();
+
+const ADMIN_PASSWORD = "Ichikawa2026";
+
+
+function showAdmin() {
+  const password = prompt("管理画面のパスワードを入力してください");
+
+  if (password === null) {
+    return;
+  }
+
+  if (password !== ADMIN_PASSWORD) {
+    alert("パスワードが違います。");
+    return;
+  }
+
+  document.querySelector(".layout").style.display = "none";
+  document.getElementById("adminPage").style.display = "block";
+
+  const monthInput = document.getElementById("adminMonth");
+
+  if (!monthInput.value) {
+    const d = new Date();
+    monthInput.value =
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  renderAdmin();
+  window.scrollTo(0, 0);
+}
+
+
+function showPunch() {
+  document.getElementById("adminPage").style.display = "none";
+  document.querySelector(".layout").style.display = "grid";
+  window.scrollTo(0, 0);
+}
+
+function moveAdminMonth(amount) {
+  const input = document.getElementById("adminMonth");
+  if (!input.value) return;
+
+  const [year, month] = input.value.split("-").map(Number);
+  const d = new Date(year, month - 1 + amount, 1);
+
+  input.value =
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+  renderAdmin();
+}
+
+document.getElementById("adminMonth").addEventListener("change", renderAdmin);
+
+function adminMinutes(time) {
+  const match = String(time || "").match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return null;
+
+  return Number(match[1]) * 60 +
+    Number(match[2]) +
+    Number(match[3] || 0) / 60;
+}
+
+function adminDuration(minutes) {
+  minutes = Math.max(0, Math.round(minutes));
+  return `${Math.floor(minutes / 60)}時間${minutes % 60}分`;
+}
+
+function renderAdmin() {
+  const month = document.getElementById("adminMonth").value;
+  const stats = document.getElementById("adminStats");
+  const employeeTable = document.getElementById("adminEmployees");
+  const details = document.getElementById("adminDetails");
+
+  if (!month) return;
+
+  const monthLogs = logs.filter(log =>
+    typeof log.date === "string" && log.date.startsWith(month)
+  );
+
+  const daily = {};
+
+  monthLogs.forEach(log => {
+    const key = `${log.id}_${log.date}`;
+    if (!daily[key]) {
+      daily[key] = {
+        id: log.id,
+        name: log.name,
+        date: log.date,
+        logs: []
+      };
+    }
+    daily[key].logs.push(log);
+  });
+
+  const dayResults = Object.values(daily).map(day => {
+    day.logs.sort((a, b) =>
+      (adminMinutes(a.time) ?? 0) - (adminMinutes(b.time) ?? 0)
+    );
+
+    let clockIn = null;
+    let breakStart = null;
+    let breakMinutes = 0;
+    let workMinutes = 0;
+    let hasClockIn = false;
+    let hasClockOut = false;
+    let clockInText = "—";
+    let clockOutText = "—";
+
+    day.logs.forEach(log => {
+      const minutes = adminMinutes(log.time);
+      if (minutes === null) return;
+
+      if (log.action === "出勤") {
+        clockIn = minutes;
+        hasClockIn = true;
+        clockInText = log.time;
+      } else if (log.action === "休憩開始" && clockIn !== null) {
+        breakStart = minutes;
+      } else if (log.action === "休憩終了" && breakStart !== null) {
+        breakMinutes += Math.max(0, minutes - breakStart);
+        breakStart = null;
+      } else if (log.action === "退勤" && clockIn !== null) {
+        workMinutes += Math.max(0, minutes - clockIn);
+        clockIn = null;
+        hasClockOut = true;
+        clockOutText = log.time;
+      }
+    });
+
+    const complete = hasClockIn && hasClockOut;
+    const actualMinutes = complete
+      ? Math.max(0, workMinutes - breakMinutes)
+      : 0;
+
+    return {
+      ...day,
+      hasClockIn,
+      hasClockOut,
+      complete,
+      clockInText,
+      clockOutText,
+      breakMinutes,
+      actualMinutes
+    };
+  });
+
+  
+  const employeeResults = employees.map(employee => {
+    const days = dayResults.filter(day =>
+      String(day.id) === String(employee.id) && day.hasClockIn
+    );
+
+    const completedDays = days.filter(day => day.complete);
+    const actualMinutes = completedDays.reduce(
+      (sum, day) => sum + day.actualMinutes, 0
+    );
+    const breakMinutes = completedDays.reduce(
+      (sum, day) => sum + day.breakMinutes, 0
+    );
+
+    const payType = employee.payType || "hourly";
+    const hourlyWage = Number(employee.hourlyWage ?? 1100);
+    const dailyWage = Number(employee.dailyWage ?? 0);
+
+    const salary = payType === "daily"
+      ? Math.round(dailyWage * completedDays.length)
+      : Math.round(hourlyWage * actualMinutes / 60);
+
+    return {
+      ...employee,
+      days: days.length,
+      completedDays: completedDays.length,
+      actualMinutes,
+      breakMinutes,
+      payType,
+      salary
+    };
+  });
+
+
+  const totalDays = dayResults.filter(day => day.hasClockIn).length;
+  const totalWork = employeeResults.reduce((sum, e) => sum + e.actualMinutes, 0);
+  const totalBreak = employeeResults.reduce((sum, e) => sum + e.breakMinutes, 0);
+
+  stats.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">対象月</div>
+      <div class="stat-value" style="font-size:20px;">${month}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">出勤記録（日単位）</div>
+      <div class="stat-value">${totalDays}日</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">実働時間 合計</div>
+      <div class="stat-value">${adminDuration(totalWork)}</div>
+    </div>
+  `;
+
+  if (employeeResults.length === 0) {
+    employeeTable.innerHTML = '<p class="empty">登録されている従業員はいません。</p>';
+  } else {
+    employeeTable.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>従業員番号</th>
+            <th>氏名</th>
+            <th>出勤日数</th>
+            <th>実働時間</th>
+            <th>休憩時間</th>
+            <th>給与見込額</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${employeeResults.map(e => `
+            <tr>
+              <td>${e.id}</td>
+              <td>${e.name}</td>
+              <td>${e.days}日</td>
+              <td>${adminDuration(e.actualMinutes)}</td>
+              <td>${adminDuration(e.breakMinutes)}</td>
+             <td>${e.salary.toLocaleString("ja-JP")}円</td> 
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  dayResults.sort((a, b) =>
+    b.date.localeCompare(a.date) || a.name.localeCompare(b.name)
+  );
+
+  if (dayResults.length === 0) {
+    details.innerHTML = '<p class="empty">この月の打刻履歴はありません。</p>';
+  } else {
+    details.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>従業員番号</th>
+            <th>氏名</th>
+            <th>出勤</th>
+            <th>退勤</th>
+            <th>実働時間</th>
+            <th>状態</th>
+            <th>打刻記録</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${dayResults.map(day => `
+            <tr>
+              <td>${day.date}</td>
+              <td>${day.id}</td>
+              <td>${day.name}</td>
+              <td>${day.clockInText}</td>
+              <td>${day.clockOutText}</td>
+              <td>${day.complete ? adminDuration(day.actualMinutes) : "未確定"}</td>
+              <td>${day.complete ? "退勤済" : "打刻確認が必要"}</td>
+              <td>
+  ${day.logs.map(log => `
+    <div style="margin:4px 0;">
+      ${log.time} ${log.action}
+      <button
+        type="button"
+        onclick='editAttendanceLog(${JSON.stringify(day.date)}, ${JSON.stringify(String(day.id))}, ${JSON.stringify(log.action)}, ${JSON.stringify(log.time)})'
+        style="padding:3px 8px; margin-left:6px; font-size:12px;">
+        編集
+      </button>
+    </div>
+  `).join("")}
+</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+}
+function editAttendanceLog(date, employeeId, action, oldTime) {
+  const target = logs.find(log =>
+    String(log.id) === String(employeeId) &&
+    log.date === date &&
+    log.action === action &&
+    log.time === oldTime
+  );
+
+  if (!target) {
+    alert("変更する打刻記録が見つかりません。");
+    return;
+  }
+
+  const newTime = prompt(
+    `${action}の時刻を変更してください（例：09:00）`,
+    target.time.slice(0, 5)
+  );
+
+  if (newTime === null) return;
+
+  if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(newTime)) {
+    alert("時刻は09:00のように入力してください。");
+    return;
+  }
+
+  target.time = newTime;
+  save();
+  renderAdmin();
+  renderMonthly();
+
+  alert("打刻時刻を変更しました。");
+}
+function exportAttendanceCSV() {
+  const month = document.getElementById("adminMonth").value;
+
+  if (!month) {
+    alert("集計する月を選択してください。");
+    return;
+  }
+
+  const monthLogs = logs.filter(log =>
+    typeof log.date === "string" &&
+    log.date.startsWith(month)
+  );
+
+  if (monthLogs.length === 0) {
+    alert("選択した月の打刻記録がありません。");
+    return;
+  }
+
+  const daily = {};
+
+  monthLogs.forEach(log => {
+    const key = `${log.id}_${log.date}`;
+
+    if (!daily[key]) {
+      daily[key] = {
+        id: log.id,
+        name: log.name,
+        date: log.date,
+        logs: []
+      };
+    }
+
+    daily[key].logs.push(log);
+  });
+
+  const rows = [[
+    "対象月", "日付", "従業員番号", "氏名",
+    "出勤時刻", "休憩開始", "休憩終了",
+    "退勤時刻", "休憩時間（分）", "実働時間（分）",
+    "実働時間"
+  ]];
+
+  Object.values(daily)
+    .sort((a, b) =>
+      a.date.localeCompare(b.date) ||
+      String(a.id).localeCompare(String(b.id), "ja", { numeric: true })
+    )
+    .forEach(day => {
+      day.logs.sort((a, b) =>
+        (adminMinutes(a.time) ?? 0) -
+        (adminMinutes(b.time) ?? 0)
+      );
+
+      let clockIn = null;
+      let clockOut = null;
+      let breakStart = null;
+      let breakMinutes = 0;
+      let workMinutes = 0;
+      let hasClockIn = false;
+      let hasClockOut = false;
+
+      const breakStarts = [];
+      const breakEnds = [];
+
+      day.logs.forEach(log => {
+        const minutes = adminMinutes(log.time);
+        if (minutes === null) return;
+
+        if (log.action === "出勤") {
+          clockIn = minutes;
+          hasClockIn = true;
+        } else if (log.action === "休憩開始" && clockIn !== null) {
+          breakStart = minutes;
+          breakStarts.push(log.time);
+        } else if (log.action === "休憩終了" && breakStart !== null) {
+          breakMinutes += Math.max(0, minutes - breakStart);
+          breakStart = null;
+          breakEnds.push(log.time);
+        } else if (log.action === "退勤" && clockIn !== null) {
+  if (breakStart !== null) {
+    workMinutes += Math.max(0, breakStart - clockIn);
+    breakStart = null;
+  } else {
+    workMinutes += Math.max(0, minutes - clockIn);
+  }
+
+  clockIn = null;
+  hasClockOut = true;
+  clockOutText = log.time;
+}
+      });
+
+      const complete = hasClockIn && hasClockOut;
+      const actualMinutes = complete
+        ? Math.max(0, workMinutes - breakMinutes)
+        : null;
+
+      const duration = actualMinutes === null
+        ? ""
+        : `${Math.floor(actualMinutes / 60)}時間${actualMinutes % 60}分`;
+
+      rows.push([
+        month,
+        day.date,
+        day.id,
+        day.name,
+        day.logs.find(log => log.action === "出勤")?.time || "",
+        breakStarts.join(" / "),
+        breakEnds.join(" / "),
+        [...day.logs].reverse().find(log => log.action === "退勤")?.time || "",
+        complete ? breakMinutes : "",
+        actualMinutes === null ? "" : actualMinutes,
+        duration
+      ]);
+    });
+
+  const csv = "\uFEFF" + rows.map(row =>
+    row.map(value =>
+      `"${String(value ?? "").replace(/"/g, '""')}"`
+    ).join(",")
+  ).join("\r\n");
+
+  const blob = new Blob([csv], {
+    type: "text/csv;charset=utf-8;"
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `市川青果_勤怠記録_${month}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+}
+
+function backupData() {
+  const data = {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    employees: employees,
+    logs: logs
+  };
+
+  const blob = new Blob(
+    [JSON.stringify(data, null, 2)],
+    { type: "application/json;charset=utf-8" }
+  );
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `市川青果_勤怠バックアップ_${new Date().toISOString().slice(0, 10)}.json`;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  alert("バックアップファイルを保存しました。大切に保管してください。");
+}
+
+function restoreData(event) {
+  const file = event.target.files[0];
+
+  if (!file) return;
+
+  if (!confirm("現在の従業員情報と打刻履歴を、バックアップの内容に置き換えますか？\n先に現在のデータをバックアップしてください。")) {
+    event.target.value = "";
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = function() {
+    try {
+      const data = JSON.parse(reader.result);
+
+      if (
+        !data ||
+        data.version !== 1 ||
+        !Array.isArray(data.employees) ||
+        !Array.isArray(data.logs)
+      ) {
+        throw new Error("ファイルの形式が正しくありません。");
+      }
+
+      const validEmployees = data.employees.every(e =>
+        e && e.id !== undefined && e.name !== undefined
+      );
+
+      const validLogs = data.logs.every(log =>
+        log &&
+        log.id !== undefined &&
+        typeof log.date === "string" &&
+        typeof log.time === "string" &&
+        typeof log.action === "string"
+      );
+
+      if (!validEmployees || !validLogs) {
+        throw new Error("従業員情報または打刻履歴に不備があります。");
+      }
+
+      if (!confirm("確認：現在のデータはバックアップの内容に置き換わります。実行しますか？")) {
+        return;
+      }
+
+      localStorage.setItem("ichikawaEmployees", JSON.stringify(data.employees));
+      localStorage.setItem("ichikawaLogs", JSON.stringify(data.logs));
+
+      alert("復元しました。画面を再読み込みします。");
+      location.reload();
+
+    } catch (error) {
+      alert("復元できませんでした。\n" + error.message);
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  reader.onerror = function() {
+    alert("ファイルを読み込めませんでした。");
+    event.target.value = "";
+  };
+
+  reader.readAsText(file);
+}
+
+</script>
+</body>
+</html>
